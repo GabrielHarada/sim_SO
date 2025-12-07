@@ -11,7 +11,6 @@ class Scheduler:
         self.quantum = quantum
         self.quantum_timer = 0
         self.preemption_flag = False
-        self.aging_rate = 0
 
         # Variables for FCFS algorithm
         self.execution_queue = q.Queue()
@@ -28,31 +27,25 @@ class Scheduler:
 
     # Execute 1 step of the simulation
     def exec(self, tasks, current_time):
-        #print("scheduler exec")
+        print("scheduler exec")
         if self.algorithm == "FCFS":
             self.current_task = self.step_fcfs(tasks, current_time)
         elif self.algorithm == "SRTF":
             self.current_task = self.step_srtf(tasks, current_time)
         elif self.algorithm == "PRIO":
             self.current_task = self.step_PRIO(tasks, current_time)
-        elif self.algorithm == "AGPRIO":
-            self.current_task = self.step_AGPRIO(tasks, current_time)
-        self.increment_time()    
+        self.increment_time()
         return self.current_task
 
         
     def increment_time(self):
         # Increment quantum timer. Reset if necessary
-        if self.current_task is None or not getattr(self.current_task, "just_returned_from_io", False):
-            self.quantum_timer = self.quantum_timer + 1 
+        self.quantum_timer = self.quantum_timer + 1
+        if self.quantum == self.quantum_timer:
+            print("Resetting quantum timer")
+            self.quantum_timer = 0
+            self.preemption_flag = True
         else:
-            # zera o flag para o próximo tick
-            delattr(self.current_task, "just_returned_from_io")
-        if self.quantum == self.quantum_timer: 
-            print("Resetting quantum timer") 
-            self.quantum_timer = 0 
-            self.preemption_flag = True 
-        else: 
             self.preemption_flag = False
 
     
@@ -111,18 +104,7 @@ class Scheduler:
         print("Ready tasks:")
         for t in tasks:
             print(t.name)
-        #Reset quantum timer for tasks just returned from I/O
-        for task in tasks:
-           if hasattr(task, 'just_returned_from_io') and task.just_returned_from_io:
-                print(f"Task {task.name} just returned from I/O, resetting quantum")
-                self.quantum_timer = 0
-                delattr(task, 'just_returned_from_io')
-        
-        if not tasks:
-            print("no ready tasks — returning None")
-            self.current_task = None
-            return None
-        elif not self.preemption_flag:
+        if not self.preemption_flag:
             print("no preemption")
             if self.current_task is not None:
                 print(f"current task: {self.current_task.name}")
@@ -133,32 +115,23 @@ class Scheduler:
             return self.current_task
         else:
             print("preemption")
-
-            # 1 — se não tem nenhuma ready task
             if len(tasks) == 0:
-                print("no ready tasks during preemption")
-                self.current_task = None
                 return None
-
-            # 2 — se current_task é None → basta pegar a primeira da fila
-            if self.current_task is None:
-                print("no current task; selecting first ready task")
+            if self.current_task is not None:
+                print(f"current task: {self.current_task.name}")
+            if self.current_task.end == float('inf'): # if not finished
+                # Rotate the list to simulate FCFS with preemption
+                old_task = tasks.pop(0)
+                print(f"old task: {old_task.name}")
+                print(f"preempting task: {old_task.name}")
+                tasks.append(old_task)
                 self.current_task = tasks[0]
-                return self.current_task
-
-            # 3 — current_task existe → verificar se terminou
-            if self.current_task.end != float('inf'):  # finished
+                return self.current_task if tasks else None
+            else: #task finished, such that it is no longer in the ready queue
                 print(f"task {self.current_task.name} finished")
                 self.quantum_timer = 0
                 self.current_task = tasks[0]
-                return self.current_task
-
-            # 4 — current_task NÃO terminou → rotacionar
-            old_task = tasks.pop(0)
-            print(f"preempting task: {old_task.name}")
-            tasks.append(old_task)
-            self.current_task = tasks[0]
-            return self.current_task
+                return self.current_task if tasks else None
             '''if self.current_task.end == float('inf'): # if not finished
                 # Rotate the list to simulate FCFS with preemption
                 old_task = tasks.pop(0)
@@ -298,28 +271,7 @@ class Scheduler:
 
         print(f"PRIORITY selected - running: {self.current_task.name if self.current_task else 'None'}")
         return self.current_task
-    
-    def step_AGPRIO(self, tasks, current_time):
-        print("prio w/ aging step")
-        print("Ready tasks:")
-        for t in tasks:
-            print(t.name)
-        for task in tasks:
-            if task != self.current_task:          # não envelhecer quem está executando
-                task.dynamic_priority += self.aging_rate
 
-        prio_list = tasks.copy()
-        prio_list.sort(key=lambda t: t.dynamic_priority, reverse=True)
-
-        if prio_list:
-            if self.current_task is not None and prio_list[0] != self.current_task:
-                print(">>> PREEMPTION due to aging/priority <<<")
-                self.preemption_flag = True
-            prio_list[0].dynamic_priority = prio_list[0].priority
-            return prio_list[0]
-        else: 
-            return None
-        
 class OS_Simulator:
     def __init__(self):
         self.algorithm = ""
@@ -346,9 +298,6 @@ class OS_Simulator:
 
         # Events
         self.mutexes = []
-        self.io_events = []
-        self.io_blocked_tasks = []
-        self.io_active_events = []
 
 
     # show messagebox with task data
@@ -384,7 +333,6 @@ class OS_Simulator:
         self.simulation_mode = ""
 
         self.mutexes = []
-        self.io_events = []
 
         for t in self.tasks:
             if hasattr(t, "remaining_time"):
@@ -452,7 +400,6 @@ class OS_Simulator:
         next_task = self.scheduler.exec(self.ready_tasks, self.current_time)
         if next_task is not None:    
             print("Executing task: ")
-            #print(self.scheduler.quantum_timer)
             for event in next_task.event_list:
                 if isinstance(event, TaskMutexEvent):
                     if event.mutex_id in [m.mutex_id for m in self.mutexes]:
@@ -493,103 +440,12 @@ class OS_Simulator:
                                         if isinstance(ev, TaskMutexEvent) and ev.mutex_id == mutex.mutex_id:
                                             mutex.lock_time_remaining = ev.duration
                                     self.ready_tasks.append(waiting_task)
-                elif isinstance(event, TaskIOEvent):
-
-                    # Momento relativo da tarefa
-                    relative_time = len(next_task.moments_in_execution)
-
-                    # 1. Evento começa AGORA?
-                    if event.occurrence_time == relative_time and not event.in_progress and not event.completed:
-                        print(f"Task {next_task.name} starting I/O: duration {event.duration}")
-
-                        event.in_progress = True
-                        event.task = next_task
-                        event.completion_time = self.current_time + event.remaining_time
-                        # Remove da CPU
-                        if next_task in self.ready_tasks:
-                            self.ready_tasks.remove(next_task)
-
-                        # Só adicionar se ainda não estiver na lista global
-                        if event not in self.io_active_events:
-                            self.io_active_events.append(event)
-
-                        if next_task not in self.io_blocked_tasks:
-                            self.io_blocked_tasks.append(next_task)
-
-                        if hasattr(self.scheduler, "current_task") and self.scheduler.current_task == next_task:
-                            print(f"Clearing scheduler.current_task because {next_task.name} went to I/O")
-                            self.scheduler.current_task = None
-
-                        # Reinicia quantum (se houver)
-                        if hasattr(self.scheduler, "quantum_timer"):
-                            self.scheduler.quantum_timer = 0
-
-                        # Chama recursivamente para escalar outra tarefa
-                        self.update_chart(update_chart_button, step_back_button)
-                        return
-
-                next_task.moments_in_execution.append(self.current_time)
-                next_task.print_task()
-
-            """if self.scheduler.preemption_flag:
-                print(f"Preempting task {next_task.name} due to quantum")
-                # Coloca a tarefa atual no final da ready queue
-                if next_task not in self.ready_tasks:
-                    self.ready_tasks.append(next_task)
-                self.scheduler.current_task = None
-                self.scheduler.preemption_flag = False
-                # Escala a próxima tarefa
-                next_task = self.scheduler.exec(self.ready_tasks, self.current_time)
-                if next_task is None:
-                    # Se não há tarefa, só avança tempo
-                    self.current_time += 1
-                    self.simulation_moment += 1
-                    self.plot_chart()
-                    return"""
-            
+            next_task.moments_in_execution.append(self.current_time)
+            next_task.print_task()
         # increment time
         if len(self.finished_tasks) < len(self.tasks):
             self.current_time += 1
             self.simulation_moment += 1
-
-            finished_io_events = []
-            for io_event in list(self.io_active_events):
-                if not io_event.in_progress:
-                    continue
-                io_event.remaining_time -= 1
-                if io_event.remaining_time <= 0:
-                    finished_io_events.append(io_event)
-
-            # Processa I/O finalizado
-            for io_event in finished_io_events:
-
-                task = io_event.task
-                print(f"[GLOBAL] I/O finished for: {task.name}")
-
-                # Remove do conjunto de eventos ativos
-                self.io_active_events.remove(io_event)
-
-                # Remove da lista de bloqueados
-                if task in self.io_blocked_tasks:
-                    self.io_blocked_tasks.remove(task)
-
-                # Reinsere na ready queue
-                if task not in self.ready_tasks and task not in self.finished_tasks:
-                    print(f"Reinserting {task.name} into ready queue after I/O")
-                    self.ready_tasks.append(task)
-                    task.just_returned_from_io = True
-                    if self.scheduler.current_task == task:
-                        self.scheduler.current_task = None
-
-                #self.scheduler.preemption_flag = False
-
-                # Reset do evento, garantindo que não fica lixo para execuções futuras
-                io_event.in_progress = False
-                io_event.completed = True
-                io_event.remaining_time = 0
-                io_event.completion_time = self.current_time
-                task = io_event.task
-                io_event.task = None
         if next_task is not None:
             # Check if the task just finished
             if hasattr(next_task, "remaining_time"):  # For SRTF or similar algorithms
@@ -630,7 +486,6 @@ class Task:
         self.start = start
         self.duration = duration
         self.priority = priority
-        self.dynamic_priority = priority
         self.event_list = event_list
 
         self.moments_in_execution = []
@@ -670,17 +525,3 @@ class Mutex:
         self.mutex_id = mutex_id
         self.locked_by = None  # Task that currently holds the mutex
         self.waiting_tasks_queue = q.Queue()
-
-class TaskIOEvent:
-    def __init__(self, occurrence_time, duration):
-        self.occurrence_time = occurrence_time   # tempo relativo ao início da tarefa
-        self.duration = duration                 # duração da operação de E/S
-        self.remaining_time = duration           # decrementado a cada step
-        self.completion_time = None              # tempo absoluto (global) em que termina a E/S
-        self.task = None
-
-        self.in_progress = False
-        self.completed = False
-
-    def print_event(self):
-        print(f"IO Event -> Occurs at: {self.occurrence_time}, Duration: {self.duration}")

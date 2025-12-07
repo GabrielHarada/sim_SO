@@ -58,7 +58,7 @@ def on_close():
 # Upload scheduler names dynamically
 def upload_scheduler_module_names():
     dropwdown["menu"].delete(0, "end")
-    entries = ["FCFS", "SRTF", "PRIO", "AGPRIO"]
+    entries = ["FCFS", "SRTF", "PRIO"]
     for filename in os.listdir("./"):
         if filename.startswith("Scheduler_") and filename.endswith(".py"):
             print("external module detected: " + filename)
@@ -192,7 +192,7 @@ os_alg_label = tk.Label(
 os_alg_label.pack(padx=5, anchor='w')
 selected_dropdown = tk.StringVar()
 selected_dropdown.set("FCFS")
-options = ["FCFS", "SRTF", "PRIO", "AGPRIO"]
+options = ["FCFS", "SRTF", "PRIO"]
 dropwdown = tk.OptionMenu(general_settings_tab, selected_dropdown, *options) # * unpacks the list
 dropwdown.pack(padx=5, pady=5, anchor='w')
 os_quantum_label = tk.Label(
