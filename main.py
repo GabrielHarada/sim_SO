@@ -5,7 +5,7 @@ import classes as cl
 import sys
 import matplotlib.pyplot as plt
 from utils import *
-
+import os
 
 simulator = cl.OS_Simulator()
 
@@ -14,9 +14,15 @@ simulator = cl.OS_Simulator()
 # Root window initial setup
 root = tk.Tk()
 root.title("OS simulator")
-root.minsize(1206, 500)
+root.minsize(1206, 559)
 root.config(background=GUI_MAIN_COLOR)
 
+# Shows messagebox with task info
+def check_task_info():
+    task_id = check_task_info_entry.get()
+    simulator.show_task_data(task_id)
+
+# Adds a task to the table
 def add_task():
     tree.insert("",
                 "end", values=(
@@ -28,17 +34,13 @@ def add_task():
                     task_event_list_textbox.get("1.0", tk.END).strip()
                 ))
 
-
+# Removes a task from the table
 def remove_task():
     task_to_be_removed = remove_task_textbox.get("1.0", tk.END).strip()
     for row_id in tree.get_children():
         task = tree.item(row_id, "values")
         if task[0] == task_to_be_removed:
             tree.delete(row_id)
-
-# Called after double-clicking on a cell
-def edit_cell_simulator(event):
-    fu.edit_cell(event, tree_simulator)
 
 # Called after double-clicking on a cell
 def edit_cell(event):
@@ -53,6 +55,18 @@ def on_close():
     root.destroy()   # Closes Tkinter window
     sys.exit()       # Ensures the Python process stops
 
+# Upload scheduler names dynamically
+def upload_scheduler_module_names():
+    dropwdown["menu"].delete(0, "end")
+    entries = ["FCFS", "SRTF", "PRIO", "AGPRIO"]
+    for filename in os.listdir("./"):
+        if filename.startswith("Scheduler_") and filename.endswith(".py"):
+            print("external module detected: " + filename)
+            name_module = filename[:-3]  # remove ".py"
+            entries.append(name_module)
+    for name_module in entries:
+        dropwdown["menu"].add_command(label=name_module, command=tk._setit(selected_dropdown, name_module))
+# Uploads a config file and fills the table
 def upload_file():
     caminho = filedialog.askopenfilename(
         title="Upload config .txt file",
@@ -64,67 +78,66 @@ def upload_file():
     
     no_config_button.pack_forget()
     upload_button.pack_forget()
-    #path_label.pack_forget()
-    #path_textbox.pack_forget()
     notebook.pack(expand=True, fill="both", padx=5, pady=5)
-    begin_simulation_button.pack(padx=5, pady=5)
-    fu.configure_file(caminho, tree, tree_simulator)
+    begin_simulation_button.pack(padx=5, pady=5, side="left")
+    reset_simulation_button.pack(padx=5, pady=5, side="left")
+    fu.configure_file(caminho, tree, selected_dropdown, os_quantum_entry)
+    upload_scheduler_module_names()
 
+# Starts simulation from scratch
 def no_config_file():
     upload_button.pack_forget()
     no_config_button.pack_forget()
     #path_label.pack_forget()
     #ath_textbox.pack_forget()
     notebook.pack(expand=True, fill="both", padx=5, pady=5)
-    begin_simulation_button.pack(padx=5, pady=5)
-    fu.configure_file("", tree, tree_simulator)
+    begin_simulation_button.pack(padx=5, pady=5, side="left")
+    reset_simulation_button.pack(padx=5, pady=5, side="left")
+    fu.configure_file("", tree, selected_dropdown, os_quantum_entry)
+    upload_scheduler_module_names()
 
-
+# Begins the simulation
 def begin_simulation():
-    notebook.pack_forget()
-    begin_simulation_button.pack_forget()
-    reset_simulation_button.pack(padx=5, pady=5)
-    result = fu.begin_simulation(simulator, image_frame, update_chart_button, general_settings_var, tree, tree_simulator)
-    if not result:
-        reset_simulation()
+    result = fu.begin_simulation(simulator, image_frame, step_forward_button, step_back_button, general_settings_var, tree, selected_dropdown.get(), os_quantum_entry.get())
+    if result:
+        begin_simulation_button.pack_forget()
+        reset_simulation_button.pack_forget()
+        notebook.pack_forget()
+        begin_simulation_button.pack_forget()
+        reset_simulation_button.pack(padx=5, pady=5)
+        check_task_info_frame.pack(padx=5, pady=5)
+
+# Resets all created elements
 def reset_simulation():
     simulator.reset()
-    update_chart_button.pack_forget()
+    step_forward_button.pack_forget()
+    step_back_button.pack_forget()
     reset_simulation_button.pack_forget()
+    check_task_info_frame.pack_forget()
     notebook.pack_forget()
+    begin_simulation_button.pack_forget()
     task_id_textbox.delete("1.0", tk.END)
     task_color_textbox.delete("1.0", tk.END)
     task_admission_textbox.delete("1.0", tk.END)
     task_duration_textbox.delete("1.0", tk.END)
     task_priority_textbox.delete("1.0", tk.END)
     task_event_list_textbox.delete("1.0", tk.END)
-    #path_label.pack(padx=5)
-    #path_textbox.pack(padx=10, pady=10) 
     upload_button.pack(padx=5, pady=5)
     no_config_button.pack(padx=5, pady=5)
 
-
-image = tk.PhotoImage(file="images/logo.png")
 
 # Tools frame
 tools_frame = tk.Frame(root, bg=GUI_TAB_COLOR)
 tools_frame.pack(padx=5, pady=5, side=tk.LEFT, fill=tk.Y) 
 
+# Title
 tk.Label(
     tools_frame,
     text="OS scheduler simulator",
     bg=GUI_TAB_COLOR,
-    width=50
+    #width=50,
+    font=("Arial", 16, "bold")
 ).pack(padx=5, pady=5)
-
-thumbnail_image = image.subsample(5, 5)
-#tk.Label(tools_frame, image=thumbnail_image).pack(padx=5, pady=5)
-"""
-path_label = tk.Label(tools_frame, text=".txt config file inside config_files folder:", bg=GUI_TAB_COLOR)
-path_label.pack(padx=5)
-path_textbox = tk.Text(tools_frame, height=1, width=30)
-path_textbox.insert(tk.END, "ex1")
-path_textbox.pack(padx=10, pady=10) """
 
 upload_button = tk.Button(tools_frame, text="Upload config file", command=upload_file)
 upload_button.pack(padx=5, pady=5)
@@ -133,14 +146,27 @@ no_config_button.pack(padx=5, pady=5)
 begin_simulation_button = tk.Button(tools_frame, text="Begin simulation", 
                           command=begin_simulation)
 reset_simulation_button = tk.Button(tools_frame, text = "Reset simulation", command=reset_simulation)
-update_chart_button = tk.Button(tools_frame, text = "Update chart", 
-                                command=lambda: simulator.update_chart())
+step_forward_button = tk.Button(tools_frame, text = "Step forward", 
+                                command=lambda: simulator.step_forward(step_forward_button, step_back_button))
+step_back_button = tk.Button(tools_frame, text = "Step back", 
+                             command=lambda: simulator.step_back())
+check_task_info_frame = tk.Frame(tools_frame, bg=GUI_TAB_COLOR)
+check_task_info_label = tk.Label(
+    check_task_info_frame,
+    text="Enter task ID to check its status: ",
+    bg=GUI_TAB_COLOR
+)
+check_task_info_label.pack(padx=5, anchor='w')
+check_task_info_entry = tk.Entry(check_task_info_frame)
+check_task_info_entry.pack(padx=5, pady=5, side="left")
+check_task_info_button = tk.Button(check_task_info_frame, text = "Check task info", command=check_task_info)
+check_task_info_button.pack(padx=5, pady=5)
 
-# Tools and Filters tabs
+# Config tabs
 notebook = ttk.Notebook(tools_frame)
 
 # General settings tab
-general_settings_tab = tk.Frame(notebook, bg=GUI_TAB_COLOR)
+general_settings_tab = tk.Frame(notebook)
 general_settings_var = tk.StringVar(value=MANUAL_EXECUTION)
 
 manual_execution_button = tk.Radiobutton(
@@ -148,7 +174,6 @@ manual_execution_button = tk.Radiobutton(
         text=MANUAL_EXECUTION,
         variable=general_settings_var,
         value=MANUAL_EXECUTION,
-        bg=GUI_TAB_COLOR,
     )
 manual_execution_button.pack(anchor="w", padx=20, pady=5)
 automatic_execution_button = tk.Radiobutton(
@@ -156,20 +181,27 @@ automatic_execution_button = tk.Radiobutton(
         text=AUTOMATIC_EXECUTION,
         variable=general_settings_var,
         value=AUTOMATIC_EXECUTION,
-        bg=GUI_TAB_COLOR,
     )
 automatic_execution_button.pack(anchor="w", padx=20, pady=5)
 
 table_width = 1
-# table for storing algorithm and quantum
-frame_table_simulator = ttk.Frame(general_settings_tab)
-frame_table_simulator.pack(fill=tk.BOTH, expand=True)
-tree_simulator = ttk.Treeview(frame_table_simulator)
-tree_simulator.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-tree_simulator.bind("<Double-1>", edit_cell_simulator)
-#scroll_y = ttk.Scrollbar(frame_table_simulator, orient=tk.VERTICAL, command=tree_simulator.yview)
-#scroll_y.pack(side=tk.RIGHT, fill=tk.Y)
-#tree_simulator.configure(yscrollcommand=scroll_y.set)
+os_alg_label = tk.Label(
+    general_settings_tab,
+    text="OS algorithm: "
+)
+os_alg_label.pack(padx=5, anchor='w')
+selected_dropdown = tk.StringVar()
+selected_dropdown.set("FCFS")
+options = ["FCFS", "SRTF", "PRIO", "AGPRIO"]
+dropwdown = tk.OptionMenu(general_settings_tab, selected_dropdown, *options) # * unpacks the list
+dropwdown.pack(padx=5, pady=5, anchor='w')
+os_quantum_label = tk.Label(
+    general_settings_tab,
+    text="OS quantum: "
+)
+os_quantum_label.pack(padx=5, anchor='w')
+os_quantum_entry = tk.Entry(general_settings_tab)
+os_quantum_entry.pack(padx=5, pady=5, anchor='w')
 
 
 
@@ -184,7 +216,7 @@ frame_table = ttk.Frame(tasks_tab, width=table_width)
 frame_table.pack(fill=tk.BOTH, expand=True)
 tree = ttk.Treeview(frame_table)
 tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-tree.bind("<Double-1>", edit_cell)
+tree.bind("<Double-1>", edit_cell) # double-clicking on a cell triggers edit_cell function
 scroll_y = ttk.Scrollbar(frame_table, orient=tk.VERTICAL, command=tree.yview)
 scroll_y.pack(side=tk.RIGHT, fill=tk.Y)
 tree.configure(yscrollcommand=scroll_y.set)
@@ -251,6 +283,8 @@ task_event_list_label.pack(padx=5, pady=5, side="left")
 task_event_list_textbox = tk.Text(task_event_list_frame, height=3, width=40)
 task_event_list_textbox.pack(padx=10, side="right")
 
+
+
 add_task_button = tk.Button(add_task_frame, text="Add task", command=add_task)
 add_task_button.pack(padx=5, pady=5)
 
@@ -266,14 +300,6 @@ remove_task_textbox.pack(padx=10, pady=10, side="left")
 remove_task_button = tk.Button(remove_task_frame, text="Remove task", command=remove_task)
 remove_task_button.pack(padx=5, pady=5)
 
-'''for filter in ["Blurring", "Sharpening"]:
-    tk.Radiobutton(
-        tasks_tab,
-        text=filter,
-        variable=tasks_var,
-        value=filter,
-        bg="lightgreen",
-    ).pack(anchor="w", padx=20, pady=5)'''
 notebook.add(tasks_tab, text="Tasks")
 
 
@@ -282,17 +308,6 @@ notebook.add(tasks_tab, text="Tasks")
 image_frame = tk.Frame(root, bg=GUI_MAIN_COLOR)
 image_frame.pack(padx=5, pady=5, side=tk.RIGHT, fill=tk.BOTH, expand=True)
 
-display_image = image.subsample(2, 2)
-'''
-tk.Label(
-    image_frame,
-    text="Image",
-    bg="grey",
-    fg="white",
-).pack(padx=5, pady=5)
-
-tk.Label(image_frame, image=display_image).pack(padx=5, pady=5)
-'''
 
 # Make sure the program is terminated after closing the window
 root.protocol("WM_DELETE_WINDOW", on_close)
