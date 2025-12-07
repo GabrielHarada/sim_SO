@@ -153,16 +153,12 @@ def validate_file(filename):
 
     # First line (OS settings)
     primeira = lines[0].split(";")
-    if len(primeira) not in (2, 3):
-        messagebox.showerror("Error", "First line should contain at most 3 fields: algorithm, quantum and aging rate.")
-        print("First line should contain at most 3 fields: algorithm, quantum and aging rate.")
+    if len(primeira) != 2:
+        messagebox.showerror("Error", "First line should contain 2 fields: algorithm and quantum.")
+        print("First line should contain 2 fields: algorithm and quantum.")
         return False
 
-    if len(primeira) == 2:
-        algoritmo, quantum = primeira
-        aging_rate = None
-    else:
-        algoritmo, quantum, aging_rate = primeira
+    algoritmo, quantum = primeira
     if not algoritmo.isalpha():
         messagebox.showerror("Error", "Algorithm should only consist of letters.")
         print("Algorithm should only consist of letters.")
@@ -171,11 +167,6 @@ def validate_file(filename):
         messagebox.showerror("Error", "Quantum must be a positive integer.")
         print("Quantum must be a positive integer.")
         return False
-    if aging_rate is not None:
-        if not aging_rate.isdigit() or int(aging_rate) < 0:
-            messagebox.showerror("Error", "Aging rate must be a non-negative integer.")
-            return False
-        aging_rate = int(aging_rate)
     task_ids = []
     # Other lines (tasks)
     padrao_cor = re.compile(r"^#[0-9a-fA-F]{6}$")
@@ -248,7 +239,6 @@ def begin_simulation(os_simulator, window, chart_button, step_back_button, simul
         for line in simulation_lines:
             print('creating new task')
             mutexes = []
-            io_events = []
             if line[5] != "-":
                 # parse event list
                 event_list = [e.strip() for e in line[5].split(",")]
@@ -273,22 +263,8 @@ def begin_simulation(os_simulator, window, chart_button, step_back_button, simul
                             for m in mutexes:
                                 if m.mutex_id == mutex_id and m.duration is None:
                                     m.duration = duration  
-                    elif event.startswith("IO"):
-                        m1 = re.match(r"IO:(\d+)-(\d+)", event)
-                        m2 = re.match(r"IO:(\d{2})-(\d{2})", event)
-                        match_io = m1 or m2
-                        if match_io:
-                            req_time = int(match_io.group(1))
-                            duration = int(match_io.group(2))
-                            io_event = cl.TaskIOEvent(req_time, duration)
-                            io_events.append(io_event)
-            
-            all_events = mutexes + io_events
-            task = cl.Task(
-                    line[0], line[1],
-                    int(line[2]), int(line[3]), int(line[4]),
-                    all_events
-                )       
+
+            task = cl.Task(line[0], line[1], int(line[2]), int(line[3]), int(line[4]), mutexes)
             task.print_task()
             os_simulator.tasks.append(task)
             #os_simulator.ready_tasks.append(task)
@@ -320,8 +296,6 @@ def begin_simulation(os_simulator, window, chart_button, step_back_button, simul
             os_simulator.scheduler = cl.Scheduler("SRTF", os_simulator.quantum)
         elif os_simulator.algorithm == "PRIO":
             os_simulator.scheduler = cl.Scheduler("PRIO", os_simulator.quantum)
-        elif os_simulator.algorithm == "AGPRIO":
-            os_simulator.scheduler = cl.Scheduler("AGPRIO", os_simulator.quantum)
         else:
             filename = os_simulator.algorithm + ".py"     # e.g. "Scheduler_FCFSNEW.py"
             fullpath = os.path.join(".", filename)
